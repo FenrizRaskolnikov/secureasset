@@ -1,43 +1,83 @@
-# Svelte + Vite
+# SecurAsset (SecureInventory)
 
-This template should help get you started developing with Svelte in Vite.
+Sistema automatizado de gestión de activos de red, auditoría de endpoints y control de postura de ciberseguridad corporativa.
 
-## Recommended IDE Setup
+## Estructura y Enlaces Clave del Repositorio
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
+Para operar, desplegar y auditar el sistema correctamente, revisa los siguientes recursos integrados en el repositorio:
 
-## Need an official Svelte framework?
+* [**`/docs`**](./docs): Carpeta que contiene la documentación oficial, incluyendo el *Manual de Operación y Administración* en formato PDF y Markdown, esquemas de bases de datos PocketBase y especificaciones técnicas.
 
-Check out [SvelteKit](https://github.com/sveltejs/kit#readme), which is also powered by Vite. Deploy anywhere with its serverless-first approach and adapt to various platforms, with out of the box support for TypeScript, SCSS, and Less, and easily-added support for mdsvex, GraphQL, PostCSS, Tailwind CSS, and more.
+* [**`/installer`**](./installer): Carpeta que contiene el archivo comprimido **`SecureInventory-Agente-Deploy.zip`**, el cual incluye el kit de instalación del agente en Python (`agente.py`) para su despliegue y configuración automática en los equipos o endpoints de la red.
 
-## Technical considerations
+## Arquitectura del Sistema
 
-**Why use this over SvelteKit?**
+SecurAsset opera mediante servicios desacoplados orquestados por contenedores:
 
-- It brings its own routing solution which might not be preferable for some users.
-- It is first and foremost a framework that just happens to use Vite under the hood, not a Vite app.
+| Contenedor / Servicio | Puerto / Protocolo | Función Principal | 
+| ----- | ----- | ----- | 
+| **`secureinventory-pb`** | `8095/TCP` | Base de datos backend (PocketBase) para inventario y configuraciones. | 
+| **`secureinventory-frontend`** | `9080/TCP` | Interfaz web interactiva (SvelteKit / Bulma CSS). | 
+| **`secureinventory-worker-network`** | Red Interna / Host | Descubrimiento de red (ARP/Nmap) y detección de Shadow IT. | 
+| **`secureinventory-worker-audit`** | Red Interna / Host | Auditoría de puertos abiertos, firmware y credenciales por defecto. | 
+| **`secureinventory-agente-python`** | Host / Agente | Agente local ejecutado en endpoints para reportar BitLocker, EDR, parches y hardware. | 
 
-This template contains as little as possible to get started with Vite + Svelte, while taking into account the developer experience with regards to HMR and intellisense. It demonstrates capabilities on par with the other `create-vite` templates and is a good starting point for beginners dipping their toes into a Vite + Svelte project.
+## Despliegue del Sistema
 
-Should you later need the extended capabilities and extensibility provided by SvelteKit, the template has been structured similarly to SvelteKit so that it is easy to migrate.
+### 1. Configuración del Archivo de Entorno (`.env`)
 
-**Why include `.vscode/extensions.json`?**
+Cree el archivo `.env` en la raíz del proyecto (o use como plantilla el archivo de configuración) asignando las IP y credenciales del servidor:
 
-Other templates indirectly recommend extensions via the README, but this file allows VS Code to prompt the user to install the recommended extension upon opening the project.
+```env
+# URL Pública de PocketBase accesible desde el navegador/frontend
+PUBLIC_POCKETBASE_URL=http://<IP_DEL_SERVIDOR>:8095
+VITE_POCKETBASE_URL=http://<IP_DEL_SERVIDOR>:8095
 
-**Why enable `checkJs` in the JS template?**
+# URL Interna de PocketBase para comunicación entre contenedores y agentes
+PUBLIC_POCKETBASE_INTERNAL_URL=http://127.0.0.1:8095
 
-It is likely that most cases of changing variable types in runtime are likely to be accidental, rather than deliberate. This provides advanced typechecking out of the box. Should you like to take advantage of the dynamically-typed nature of JavaScript, it is trivial to change the configuration.
+# Credenciales de Administrador / Superusuario para Workers y API
+PB_ADMIN_EMAIL=tu_admin@dominio.com
+PB_ADMIN_PASS=tu_contrasena_segura
 
-**Why is HMR not preserving my local component state?**
-
-HMR state preservation comes with a number of gotchas! It has been disabled by default in both `svelte-hmr` and `@sveltejs/vite-plugin-svelte` due to its often surprising behavior. You can read the details [here](https://github.com/sveltejs/svelte-hmr/tree/master/packages/svelte-hmr#preservation-of-local-state).
-
-If you have state that's important to retain within a component, consider creating an external store which would not be replaced by HMR.
-
-```js
-// store.js
-// An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
+# Credenciales de Agente Worker para autenticación de endpoints
+AGENT_USER=agente_worker@dominio.com
+AGENT_PASS=tu_clave_worker
 ```
+
+### 2. Puesta en Marcha con Contenedores
+
+Puedes levantar la infraestructura utilizando **Podman Compose** (recomendado en modo *rootless*) o **Docker Compose**:
+
+#### Opción A: Despliegue mediante Podman Compose
+
+```bash
+# 1. Construir e iniciar los contenedores en segundo plano
+podman compose up -d --build
+
+# 2. Verificación del estado de los contenedores
+podman ps
+```
+
+#### Opción B: Despliegue mediante Docker Compose
+
+```bash
+# 1. Construir e iniciar los contenedores en segundo plano
+docker compose up -d --build
+
+# 2. Verificación del estado de los contenedores
+docker ps
+```
+
+### 3. Verificación del Estado y Acceso a la Plataforma
+
+Una vez ejecutados los contenedores en segundo plano:
+
+* **Dashboard Principal (Frontend SvelteKit):** `http://<IP_DEL_SERVIDOR>:9080/`
+* **Panel de Administración de Base de Datos (PocketBase):** `http://<IP_DEL_SERVIDOR>:8095/_/`
+
+---
+
+## Documentación Adicional
+
+Consulta los manuales completos dentro de la ruta [`/docs`](./docs) para procedimientos avanzados de cambio de credenciales, gestión de sedes, políticas de seguridad y la guía de despliegue del agente de Windows.
