@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # 1. Servicio Base de Datos
+  pocketbase:
+    build:
+      context: .
+      dockerfile: Dockerfile.pocketbase
+    container_name: secureinventory-pb
+    restart: always
+    ports:
+      - "8095:8090"
+    volumes:
+      - ./database/pb_data:/pb/pb_data:Z
+      - ./database/pb_migrations:/pb/pb_migrations:Z
+  # 2. Servicio Frontend (SvelteKit)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: secureinventory-frontend
+    restart: always
+    ports:
+      - "9080:5173"
+    environment:
+      - PUBLIC_POCKETBASE_URL=${PUBLIC_POCKETBASE_URL}
+      - VITE_POCKETBASE_URL=${VITE_POCKETBASE_URL}
+    depends_on:
+      - pocketbase
+
+  # 3. Workers de Monitoreo (Node.js & Python)
+  worker-network:
+    build:
+      context: .
+      dockerfile: Dockerfile.workers
+    container_name: secureinventory-worker-network
+    command: node backend-red/worker-network.js
+    restart: always
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - PUBLIC_POCKETBASE_URL=${PUBLIC_POCKETBASE_URL}
+      - PB_ADMIN_EMAIL=${PB_ADMIN_EMAIL}
+      - PB_ADMIN_PASS=${PB_ADMIN_PASS}
+      - TARGET_SUBNET=${TARGET_SUBNET:-192.168.10.0/24}
+    env_file:
+      - .env
+    depends_on:
+      - pocketbase
+
+  worker-agentless:
+    build:
+      context: .
+      dockerfile: Dockerfile.workers
+    container_name: secureinventory-worker-agentless
+    command: node backend-red/worker-agentless.js
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      - pocketbase
+
+  worker-audit:
+    build:
+      context: .
+      dockerfile: Dockerfile.workers
+    container_name: secureinventory-worker-audit
+    command: node backend-red/worker-audit.js
+    restart: always
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - PUBLIC_POCKETBASE_INTERNAL_URL=${PUBLIC_POCKETBASE_INTERNAL_URL}
+      - PB_ADMIN_EMAIL=${PB_ADMIN_EMAIL}
+      - PB_ADMIN_PASS=${PB_ADMIN_PASS}
+    env_file:
+      - .env
+    depends_on:
+      - pocketbase
+
+  agente-python:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: secureinventory-agente-python
+    command: python agente-endpoint/agente.py
+    restart: always
+    network_mode: "host"
+    pid: "host"
+    volumes:
+      - /sys:/sys:ro
+      - /proc:/proc:ro
+    environment:
+      - PUBLIC_POCKETBASE_INTERNAL_URL=${PUBLIC_POCKETBASE_INTERNAL_URL}
+    env_file:
+      - .env
+    depends_on:
+      - pocketbase
